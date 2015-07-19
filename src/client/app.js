@@ -1954,15 +1954,19 @@ function renderNowPlaying() {
 
 function renderAlbumArt(track) {
   console.log(track.albumArt);
-  if(track.albumArt) {
-    trackAlbumArtDisplay.innerHTML = "<a href='albumart/" +
-        track.albumArt + "'" +
-        " target='_blank'>" +
-        "<img src='albumart/" + track.albumArt + "'>" +
-        "</a>";
-  } else {
-    trackAlbumArtDisplay.innerHTML = "&nbsp;";
+  var albumArt = track.albumArt;
+  if(!albumArt || albumArt.length === 0) {
+    albumArt = undefined;
   }
+  var url = "albumart/" + albumArt;
+  if(!track.albumArt) {
+    url += "?artist=" + escape(track.artistName) + "&album=" + escape(track.albumName);
+  }
+  trackAlbumArtDisplay.innerHTML = "<a href='" +
+  url + "'" +
+  " target='_blank'>" +
+  "<img src='" + url + "'>" +
+  "</a>";
 }
 
 function render() {
