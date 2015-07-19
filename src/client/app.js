@@ -1941,7 +1941,11 @@ function renderNowPlaying() {
     trackDisplayDom.textContent = getNowPlayingText(track);
     console.log("album art: " + track.albumArt);
     if(track.albumArt) {
-      trackAlbumArtDisplay.innerHTML = "<img src='albumart/" + track.albumArt + "'>";
+      trackAlbumArtDisplay.innerHTML = "<a href='albumart/" + 
+          track.albumArt + "'" +
+          " target='_blank'>" +
+          "<img src='albumart/" + track.albumArt + "'>" +
+          "</a>";
     } else {
       trackAlbumArtDisplay.innerHTML = "&nbsp;";
     }
