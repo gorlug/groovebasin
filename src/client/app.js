@@ -1953,7 +1953,6 @@ function renderNowPlaying() {
 }
 
 function renderAlbumArt(track) {
-  console.log(track.albumArt);
   var albumArt = track.albumArt;
   if(!albumArt || albumArt.length === 0) {
     albumArt = undefined;
