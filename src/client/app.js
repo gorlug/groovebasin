@@ -642,6 +642,7 @@ var playlistsListDom = document.getElementById('playlists-list');
 var playlistsDom = document.getElementById('playlists');
 var uploadDom = document.getElementById('upload');
 var trackDisplayDom = document.getElementById('track-display');
+var trackAlbumArtDisplay = document.getElementById('track-album-art-display');
 var libHeaderDom = document.getElementById('lib-window-header');
 var queueHeaderDom = document.getElementById('queue-header');
 var autoQueueUploadsDom = document.getElementById('auto-queue-uploads');
@@ -1938,6 +1939,12 @@ function renderNowPlaying() {
   updateTitle();
   if (track) {
     trackDisplayDom.textContent = getNowPlayingText(track);
+    console.log("album art: " + track.albumArt);
+    if(track.albumArt) {
+      trackAlbumArtDisplay.innerHTML = "<img src='albumart/" + track.albumArt + "'>";
+    } else {
+      trackAlbumArtDisplay.innerHTML = "&nbsp;";
+    }
   } else {
     trackDisplayDom.innerHTML = "&nbsp;";
   }
