@@ -200,10 +200,12 @@
     <div id="queue-list">
       <div id="queue-header" class="header">
         <span class="track">&nbsp;</span>
-        <span class="title">Title</span>
-        <span class="artist">Artist</span>
-        <span class="album">Album</span>
         <span class="time">Time</span>
+        <span class="middle">
+          <span class="title">Title</span>
+          <span class="artist">Artist</span>
+          <span class="album">Album</span>
+        </span>
       </div>
       <div id="queue-items">
       </div>
@@ -351,6 +353,10 @@
     <dl>
       <dt>a</dt>
       <dd>Add selected songs to a playlist</dd>
+    </dl>
+    <dl>
+      <dt>l</dt>
+      <dd>Add/remove labels for the selected songs</dd>
     </dl>
 
     <h1>Playlists</h1>
@@ -547,6 +553,7 @@
     <li id="menu-queue-next-random"><a href="#">Queue Next in Random Order</a></li>
     <li id="menu-remove"><a href="#">Remove from Playlist</a></li>
     <li id="menu-add-to-playlist"><a href="#">Add to Playlist...</a></li>
+    <li id="menu-add-remove-label"><a href="#">Add/Remove Labels...</a></li>
     <li id="menu-shuffle"><a href="#">Shuffle</a></li>
     <li id="menu-delete"><a href="#">Delete from Library</a></li>
     <li id="menu-delete-playlist"><a href="#">Delete Playlist</a></li>
@@ -561,6 +568,14 @@
     <ul id="add-to-playlist-list">
     </ul>
     <div id="add-to-playlist-new"></div>
+  </div>
+  <div id="add-remove-label-dialog" style="display: none">
+    <div>
+      <input type="text" id="add-remove-label-filter" placeholder="filter">
+    </div>
+    <div id="add-remove-label-list">
+    </div>
+    <div id="add-remove-label-new"></div>
   </div>
   <script src="app.js"></script>
 </body>

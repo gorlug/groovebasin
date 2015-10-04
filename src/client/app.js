@@ -7,6 +7,7 @@ var uuid = require('./uuid');
 var autoDjOn = false;
 var hardwarePlaybackOn = false;
 var haveAdminUser = true;
+var streamEndpoint = null;
 
 var eventsListScrolledToBottom = true;
 var isBrowserTabActive = true;
@@ -723,6 +724,7 @@ var menuQueueRandom = document.getElementById('menu-queue-random');
 var menuQueueNextRandom = document.getElementById('menu-queue-next-random');
 var menuRemove = document.getElementById('menu-remove');
 var menuAddToPlaylist = document.getElementById('menu-add-to-playlist');
+var menuAddRemoveLabel = document.getElementById('menu-add-remove-label');
 var menuShuffle = document.getElementById('menu-shuffle');
 var menuDelete = document.getElementById('menu-delete');
 var menuDeletePlaylist = document.getElementById('menu-delete-playlist');
@@ -733,6 +735,10 @@ var addToPlaylistDialog = document.getElementById('add-to-playlist-dialog');
 var addToPlaylistFilter = document.getElementById('add-to-playlist-filter');
 var addToPlaylistList = document.getElementById('add-to-playlist-list');
 var addToPlaylistNew = document.getElementById('add-to-playlist-new');
+var addRemoveLabelDialog = document.getElementById('add-remove-label-dialog');
+var addRemoveLabelFilter = document.getElementById('add-remove-label-filter');
+var addRemoveLabelList = document.getElementById('add-remove-label-list');
+var addRemoveLabelNew = document.getElementById('add-remove-label-new');
 
 var tabs = {
   library: {
@@ -760,6 +766,7 @@ var activeTab = tabs.library;
 var triggerRenderLibrary = makeRenderCall(renderLibrary, 100);
 var triggerRenderQueue = makeRenderCall(renderQueue, 100);
 var triggerPlaylistsUpdate = makeRenderCall(updatePlaylistsUi, 100);
+var triggerLabelsUpdate = makeRenderCall(updateLabelsUi, 100);
 var triggerResize = makeRenderCall(resizeDomElements, 20);
 var keyboardHandlers = (function() {
   var volumeDownHandler = {
@@ -906,6 +913,15 @@ var keyboardHandlers = (function() {
       alt: false,
       shift: true,
       handler: onShuffleContextMenu,
+    },
+    // l
+    76: {
+      ctrl: false,
+      alt: false,
+      shift: false,
+      handler: function(ev) {
+        onAddRemoveLabelContextMenu(ev);
+      },
     },
     // p
     80: {
@@ -1270,6 +1286,44 @@ var eventTypeMessageFns = {
       return prefix + getEventNowPlayingText(ev);
     }
   },
+  labelCreate: function(ev) {
+    return "created " + eventLabelName(ev);
+  },
+  labelRename: function(ev) {
+    return "renamed " + eventLabelName(ev, ev.text) + " to " + eventLabelName(ev);
+  },
+  labelColorUpdate: function(ev) {
+    if (ev.label) {
+      return "changed color of " + eventLabelName(ev) + " from " + ev.text + " to " + ev.label.color;
+    } else {
+      return "changed color of (deleted label)";
+    }
+  },
+  labelDelete: function(ev) {
+    return "deleted " + eventLabelName(ev, ev.text);
+  },
+  labelAdd: function(ev) {
+    if (ev.pos === 1) {
+      if (ev.subCount === 1) {
+        return "added " + eventLabelName(ev) + " to " + getEventNowPlayingText(ev);
+      } else {
+        return "added labels to " + getEventNowPlayingText(ev);
+      }
+    } else {
+      return "added labels to " + ev.pos + " tracks";
+    }
+  },
+  labelRemove: function(ev) {
+    if (ev.pos === 1) {
+      if (ev.subCount === 1) {
+        return "removed " + eventLabelName(ev) + " from " + getEventNowPlayingText(ev);
+      } else {
+        return "removed labels from " + getEventNowPlayingText(ev);
+      }
+    } else {
+      return "removed labels from " + ev.pos + " tracks";
+    }
+  },
   login: function(ev) {
     return "logged in";
   },
@@ -1370,10 +1424,11 @@ var searchTimer = null;
 var menuPermSelectors = {
   admin: [menuDelete, menuEditTags],
   control: [menuRemove, menuShuffle, menuQueue, menuQueueNext, menuQueueRandom, menuQueueNextRandom],
-  playlist: [menuDeletePlaylist, menuAddToPlaylist],
+  playlist: [menuDeletePlaylist, menuAddToPlaylist, menuAddRemoveLabel],
 };
 
 var addToPlaylistDialogFilteredList = [];
+var addRemoveLabelDialogFilteredList = [];
 
 init();
 
@@ -1517,10 +1572,12 @@ function renderQueue() {
     queueItemsDom.insertAdjacentHTML('beforeend',
       '<div class="pl-item">' +
         '<span class="track"></span>' +
-        '<span class="title"></span>' +
-        '<span class="artist"></span>' +
-        '<span class="album"></span>' +
         '<span class="time"></span>' +
+        '<span class="middle">' +
+          '<span class="title"></span>' +
+          '<span class="artist"></span>' +
+          '<span class="album"></span>' +
+        '</span>' +
       '</div>');
   }
   // remove the extra dom entries
@@ -1537,17 +1594,55 @@ function renderQueue() {
     domItem.setAttribute('data-id', item.id);
     var track = item.track;
     domItem.children[0].textContent = track.track || "";
-    domItem.children[1].textContent = track.name || "";
-    domItem.children[2].textContent = track.artistName || "";
-    domItem.children[3].textContent = track.albumName || "";
 
     var timeText = player.isScanning(track) ? "scan" : formatTime(track.duration);
-    domItem.children[4].textContent = timeText;
+    domItem.children[1].textContent = timeText;
+
+    var middleDom = domItem.children[2];
+    middleDom.children[0].textContent = track.name || "";
+    middleDom.children[1].textContent = track.artistName || "";
+    middleDom.children[2].textContent = track.albumName || "";
+
+    var trackLabels = getTrackLabels(track);
+    for (var label_i = 0; label_i < trackLabels.length; label_i += 1) {
+      var label = trackLabels[label_i];
+      var labelBoxDom = document.createElement('span');
+      labelBoxDom.classList.add("label-box");
+      labelBoxDom.style.backgroundColor = label.color;
+      labelBoxDom.setAttribute('title', label.name);
+      middleDom.children[0].appendChild(labelBoxDom);
+    }
   }
 
   refreshSelection();
   labelQueueItems();
   queueItemsDom.scrollTop = scrollTop;
+}
+
+function getTrackLabels(track) {
+  var labelList = Object.keys(track.labels).map(getLabelById);
+  labelList.sort(compareNameAndId);
+  return labelList;
+}
+
+function compareNameAndId(a, b) {
+  var result = operatorCompare(a.name, b.name);
+  if (result) return result;
+  return operatorCompare(a.id, b.id);
+}
+
+function operatorCompare(a, b){
+  if (a === b) {
+    return 0;
+  } else if (a > b) {
+    return -1;
+  } else {
+    return 1;
+  }
+}
+
+function getLabelById(labelId) {
+  return player.library.labelTable[labelId];
 }
 
 function updateQueueDuration() {
@@ -1724,10 +1819,20 @@ function updatePlaylistsUi() {
   updateAddToPlaylistDialogDisplay();
 }
 
+function updateLabelsUi() {
+  updateAddRemoveLabelDialogDisplay();
+}
+
 function popAddToPlaylistDialog() {
   popDialog(addToPlaylistDialog, "Add to Playlist", 400, Math.min(500, window.innerHeight - 40));
   addToPlaylistFilter.focus();
   addToPlaylistFilter.select();
+}
+
+function popAddRemoveLabelDialog() {
+  popDialog(addRemoveLabelDialog, "Add/Remove Labels", 400, Math.min(500, window.innerHeight - 40));
+  addRemoveLabelFilter.focus();
+  addRemoveLabelFilter.select();
 }
 
 function updateAddToPlaylistDialogDisplay() {
@@ -2410,7 +2515,12 @@ function performDrag(ev, callbacks) {
   }
 }
 
+function isDialogOpen() {
+  return closeOpenDialog !== noop;
+}
+
 function clearSelectionAndHideMenu() {
+  if (isDialogOpen()) return;
   removeContextMenu();
   selection.fullClear();
   refreshSelection();
@@ -2455,15 +2565,37 @@ function setUpGenericUi() {
   document.getElementById('modal-close').addEventListener('click', callCloseOpenDialog, false);
   blackoutDom.addEventListener('keydown', onBlackoutKeyDown, false);
   blackoutDom.addEventListener('mousedown', callCloseOpenDialog, false);
+
+  modalDom.addEventListener('keydown', onModalKeyDown, false);
+
   addToPlaylistFilter.addEventListener('keydown', onAddToPlaylistFilterKeyDown, false);
   addToPlaylistFilter.addEventListener('keyup', updateAddToPlaylistDialogDisplay, false);
   addToPlaylistFilter.addEventListener('cut', updateAddToPlaylistDialogDisplay, false);
   addToPlaylistFilter.addEventListener('paste', updateAddToPlaylistDialogDisplay, false);
   addToPlaylistNew.addEventListener('mousedown', onAddToPlaylistNewClick, false);
   addToPlaylistList.addEventListener('mousedown', onAddToPlaylistListClick, false);
+
+  addRemoveLabelFilter.addEventListener('keydown', onAddRemoveLabelFilterKeyDown, false);
+  addRemoveLabelFilter.addEventListener('keyup', updateAddRemoveLabelDialogDisplay, false);
+  addRemoveLabelFilter.addEventListener('cut', updateAddRemoveLabelDialogDisplay, false);
+  addRemoveLabelFilter.addEventListener('paste', updateAddRemoveLabelDialogDisplay, false);
+  addRemoveLabelNew.addEventListener('mousedown', onAddRemoveLabelNewClick, false);
+  addRemoveLabelList.addEventListener('mousedown', onAddRemoveLabelListClick, false);
+  addRemoveLabelList.addEventListener('change', onAddRemoveLabelListChange, false);
+}
+
+function onModalKeyDown(ev) {
+  ev.stopPropagation();
+  switch (ev.which) {
+  case 27: // Escape
+    ev.preventDefault();
+    closeOpenDialog();
+    return;
+  }
 }
 
 function onAddToPlaylistListClick(ev) {
+  if (ev.button !== 0) return;
   ev.stopPropagation();
   ev.preventDefault();
   var clickedLi = getFirstChildToward(addToPlaylistList, ev.target);
@@ -2507,6 +2639,191 @@ function onAddToPlaylistFilterKeyDown(ev) {
     }
     return;
   }
+}
+
+function onAddRemoveLabelFilterKeyDown(ev) {
+  ev.stopPropagation();
+  switch (ev.which) {
+  case 27: // Escape
+    ev.preventDefault();
+    if (addRemoveLabelFilter.value === "") {
+      closeOpenDialog();
+    } else {
+      addRemoveLabelFilter.value = "";
+    }
+    return;
+  case 13: // Enter
+    ev.preventDefault();
+    if (addRemoveLabelDialogFilteredList.length === 0) {
+      onAddRemoveLabelNewClick(ev);
+    } else {
+      var labelId = addRemoveLabelDialogFilteredList[0].id;
+      toggleLabelOnSelection(labelId);
+      if (!ev.shiftKey) {
+        closeOpenDialog();
+      }
+    }
+    return;
+  }
+}
+
+function updateAddRemoveLabelDialogDisplay(ev) {
+  var loweredFilter = addRemoveLabelFilter.value.toLowerCase();
+  addRemoveLabelDialogFilteredList = [];
+  var exactMatch = false;
+  player.library.labelList.forEach(function(label) {
+    if (label.name.toLowerCase().indexOf(loweredFilter) >= 0) {
+      addRemoveLabelDialogFilteredList.push(label);
+      if (addRemoveLabelFilter.value === label.name) {
+        exactMatch = true;
+      }
+    }
+  });
+
+  addRemoveLabelNew.textContent = "\"" + addRemoveLabelFilter.value + "\" (create new)";
+  addRemoveLabelNew.style.display = (exactMatch || loweredFilter === "") ? "none" : "";
+
+
+  // add the missing dom entries
+  var i;
+  for (i = addRemoveLabelList.childElementCount; i < addRemoveLabelDialogFilteredList.length; i += 1) {
+    addRemoveLabelList.insertAdjacentHTML('beforeend',
+      '<div class="label-dialog-item">' +
+        '<input type="checkbox" class="label-dialog-checkbox">' +
+        '<button class="button label-dialog-trash">' +
+          '<label class="icon icon-trash"></label>' +
+        '</button>' +
+        '<button class="button label-dialog-rename">' +
+          '<label class="icon icon-tag"></label>' +
+        '</button>' +
+        '<input type="color" class="label-dialog-color"></span>' +
+        '<span class="label-dialog-name"></span>' +
+      '</div>');
+  }
+  // remove the extra dom entries
+  while (addRemoveLabelDialogFilteredList.length < addRemoveLabelList.childElementCount) {
+    addRemoveLabelList.removeChild(addRemoveLabelList.lastChild);
+  }
+
+  var selectedTracks = selection.toTrackKeys().map(function(key) {
+    return player.library.trackTable[key];
+  });
+
+  // overwrite existing dom entries
+  for (i = 0; i < addRemoveLabelDialogFilteredList.length; i += 1) {
+    var domItem = addRemoveLabelList.children[i];
+    var labelDomItem = domItem.children[4];
+    var label = addRemoveLabelDialogFilteredList[i];
+    domItem.setAttribute('data-key', label.id);
+    labelDomItem.textContent = label.name;
+
+    var colorDomItem = domItem.children[3];
+    colorDomItem.value = label.color;
+
+    var checkboxDom = domItem.children[0];
+    var allHaveLabel = true;
+    var allMissingLabel = true;
+    for (var track_i = 0; track_i < selectedTracks.length; track_i += 1) {
+      var selectedTrack = selectedTracks[track_i];
+      if (selectedTrack.labels[label.id]) {
+        allMissingLabel = false;
+      } else {
+        allHaveLabel = false;
+      }
+    }
+    if (allHaveLabel) {
+      checkboxDom.checked = true;
+      checkboxDom.indeterminate = false;
+    } else if (allMissingLabel) {
+      checkboxDom.checked = false;
+      checkboxDom.indeterminate = false;
+    } else {
+      checkboxDom.checked = false;
+      checkboxDom.indeterminate = true;
+    }
+  }
+}
+
+function onAddRemoveLabelListChange(ev) {
+  ev.stopPropagation();
+  ev.preventDefault();
+
+  var clickedItem = getFirstChildToward(addRemoveLabelList, ev.target);
+  if (!clickedItem) return;
+  if (!havePerm('playlist')) return;
+  var labelId = clickedItem.getAttribute('data-key');
+
+  if (ev.target.classList.contains('label-dialog-color')) {
+    player.updateLabelColor(labelId, ev.target.value);
+  } else if (ev.target.classList.contains('label-dialog-checkbox')) {
+    toggleLabelOnSelection(labelId);
+  }
+}
+
+function onAddRemoveLabelListClick(ev) {
+  if (ev.button !== 0) return;
+
+  ev.stopPropagation();
+  ev.preventDefault();
+
+  var clickedItem = getFirstChildToward(addRemoveLabelList, ev.target);
+  if (!clickedItem) return;
+  if (!havePerm('playlist')) return;
+  var labelId = clickedItem.getAttribute('data-key');
+  var label = player.library.labelTable[labelId];
+
+  var target = ev.target;
+  if (target.tagName === 'LABEL') {
+    target = target.parentNode;
+  }
+
+  if (target.classList.contains('label-dialog-trash')) {
+      if (!confirm("You are about to delete the label \"" + label.name + "\"")) {
+        return;
+      }
+      player.deleteLabels([labelId]);
+  } else if (target.classList.contains('label-dialog-rename')) {
+    var newName = prompt("Rename label \"" + label.name + "\" to:", label.name);
+    player.renameLabel(labelId, newName);
+  } else if (!ev.target.classList.contains("label-dialog-color") &&
+             !ev.target.classList.contains("label-dialog-checkbox"))
+  {
+    var keepOpen = ev.shiftKey;
+    if (!keepOpen) closeOpenDialog();
+
+    toggleLabelOnSelection(labelId);
+
+  }
+}
+
+function toggleLabelOnSelection(labelId) {
+  var selectionTrackKeys = selection.toTrackKeys();
+  var selectedTracks = selectionTrackKeys.map(function(key) {
+    return player.library.trackTable[key];
+  });
+
+  var allHaveLabel = true;
+  for (var track_i = 0; track_i < selectedTracks.length; track_i += 1) {
+    var selectedTrack = selectedTracks[track_i];
+    if (!selectedTrack.labels[labelId]) {
+      allHaveLabel = false;
+      break;
+    }
+  }
+  if (allHaveLabel) {
+    player.removeLabel(labelId, selectionTrackKeys);
+  } else {
+    player.addLabel(labelId, selectionTrackKeys);
+  }
+}
+
+function onAddRemoveLabelNewClick(ev) {
+  ev.stopPropagation();
+  ev.preventDefault();
+  if (!havePerm('playlist')) return;
+  if (!ev.shiftKey) closeOpenDialog();
+  var label = player.createLabel(addRemoveLabelFilter.value);
+  player.addLabel(label.id, selection.toTrackKeys());
 }
 
 function handleAutoDjClick(ev) {
@@ -3189,7 +3506,6 @@ function updateSettingsAuthUi() {
   authPermControlDom.style.display = havePerm('control') ? "" : "none";
   authPermPlaylistDom.style.display = havePerm('playlist') ? "" : "none";
   authPermAdminDom.style.display = havePerm('admin') ? "" : "none";
-  streamUrlDom.setAttribute('href', getStreamUrl());
   settingsAuthRequestDom.style.display =
     (myUser.registered && !myUser.requested && !myUser.approved) ? "" : "none";
   settingsAuthLogoutDom.style.display = myUser.registered ? "" : "none";
@@ -3199,6 +3515,12 @@ function updateSettingsAuthUi() {
 
   toggleHardwarePlaybackDom.disabled = !havePerm('admin');
   toggleHardwarePlaybackDom.setAttribute('title', havePerm('admin') ? "" : "Requires admin privilege.");
+
+  updateStreamUrlUi();
+}
+
+function updateStreamUrlUi() {
+  streamUrlDom.setAttribute('href', streamEndpoint);
 }
 
 function updateSettingsAdminUi() {
@@ -3228,7 +3550,7 @@ function onLastFmSignOutClick(ev) {
 function onToggleScrobbleClick(ev) {
   localState.lastfm.scrobbling_on = !localState.lastfm.scrobbling_on;
   saveLocalState();
-  var msg = localState.lastfm.scrobbling_on ? 'LastFmScrobblersAdd' : 'LastFmScrobblersRemove';
+  var msg = localState.lastfm.scrobbling_on ? 'lastFmScrobblersAdd' : 'lastFmScrobblersRemove';
   var params = {
     username: localState.lastfm.username,
     sessionKey: localState.lastfm.session_key
@@ -3570,6 +3892,14 @@ function eventPlaylistName(ev) {
   return ev.playlist ? ("playlist " + ev.playlist.name) : "(deleted playlist)";
 }
 
+function eventLabelName(ev, name) {
+  if (name) {
+    return "label " + name;
+  } else {
+    return ev.label ? ("label " + ev.label.name) : "(deleted label)";
+  }
+}
+
 function getEventNowPlayingText(ev) {
   if (ev.track) {
     return getNowPlayingText(ev.track);
@@ -3739,6 +4069,7 @@ function setUpLibraryUi() {
   menuRemove.addEventListener('click', onRemoveFromPlaylistContextMenu, false);
   menuShuffle.addEventListener('click', onShuffleContextMenu, false);
   menuAddToPlaylist.addEventListener('click', onAddToPlaylistContextMenu, false);
+  menuAddRemoveLabel.addEventListener('click', onAddRemoveLabelContextMenu, false);
 }
 
 function onAddToPlaylistContextMenu(ev) {
@@ -3748,6 +4079,15 @@ function onAddToPlaylistContextMenu(ev) {
   if (selection.isEmpty()) return;
   removeContextMenu();
   popAddToPlaylistDialog();
+}
+
+function onAddRemoveLabelContextMenu(ev) {
+  ev.preventDefault();
+  ev.stopPropagation();
+  if (!havePerm('playlist')) return;
+  if (selection.isEmpty()) return;
+  removeContextMenu();
+  popAddRemoveLabelDialog();
 }
 
 function maybeRenamePlaylistAtCursor() {
@@ -4016,7 +4356,7 @@ function setAllTabsHeight(h) {
 }
 
 function getStreamerCount() {
-  var count = player.streamers;
+  var count = player.anonStreamers;
   player.usersList.forEach(function(user) {
     if (user.streaming) count += 1;
   });
@@ -4062,11 +4402,6 @@ function sendStreamingStatus() {
   socket.send("setStreaming", tryingToStream);
 }
 
-function getStreamUrl() {
-  // keep the URL relative so that reverse proxies can work
-  return "stream.mp3";
-}
-
 function onStreamPlaying() {
   stillBuffering = false;
   renderStreamButton();
@@ -4084,7 +4419,7 @@ function clearStreamBuffer() {
 function updateStreamPlayer() {
   if (actuallyStreaming !== tryingToStream || actuallyPlaying !== player.isPlaying) {
     if (tryingToStream) {
-      streamAudio.src = getStreamUrl();
+      streamAudio.src = streamEndpoint;
       streamAudio.load();
       if (player.isPlaying) {
         streamAudio.play();
@@ -4126,16 +4461,16 @@ function init() {
   var queryObj = parseQueryString();
   if (queryObj.token) {
     socket.on('connect', function() {
-      socket.send('LastFmGetSession', queryObj.token);
+      socket.send('lastFmGetSession', queryObj.token);
     });
-    socket.on('LastFmGetSessionSuccess', function(params){
+    socket.on('lastFmGetSessionSuccess', function(params){
       localState.lastfm.username = params.session.name;
       localState.lastfm.session_key = params.session.key;
       localState.lastfm.scrobbling_on = false;
       saveLocalState();
       refreshPage();
     });
-    socket.on('LastFmGetSessionError', function(message){
+    socket.on('lastFmGetSessionError', function(message){
       alert("Error authenticating: " + message);
       refreshPage();
     });
@@ -4145,7 +4480,7 @@ function init() {
     hardwarePlaybackOn = isOn;
     updateSettingsAdminUi();
   });
-  socket.on('LastFmApiKey', updateLastFmApiKey);
+  socket.on('lastFmApiKey', updateLastFmApiKey);
   socket.on('user', function(data) {
     myUser = data;
     authUsernameDisplayDom.textContent = myUser.name;
@@ -4162,9 +4497,10 @@ function init() {
   socket.on('token', function(token) {
     document.cookie = "token=" + token + "; path=/";
   });
-  socket.on('volumeUpdate', function(vol) {
-    player.volume = vol;
-    renderVolumeSlider();
+  socket.on('streamEndpoint', function(data) {
+    streamEndpoint = data;
+    updateStreamPlayer();
+    updateStreamUrlUi();
   });
   socket.on('autoDjOn', function(data) {
     autoDjOn = data;
@@ -4178,6 +4514,7 @@ function init() {
   socket.on('connect', function(){
     sendAuth();
     sendStreamingStatus();
+    socket.send('subscribe', {name: 'streamEndpoint'});
     socket.send('subscribe', {name: 'autoDjOn'});
     socket.send('subscribe', {name: 'hardwarePlayback'});
     socket.send('subscribe', {name: 'haveAdminUser'});
@@ -4193,11 +4530,22 @@ function init() {
     renderStreamButton();
   });
   player.on('importProgress', renderImportProgress);
-  player.on('libraryupdate', triggerRenderLibrary);
+  player.on('libraryUpdate', function() {
+    triggerRenderLibrary();
+    triggerLabelsUpdate();
+    triggerRenderQueue();
+    renderNowPlaying();
+    renderQueueButtons();
+  });
   player.on('queueUpdate', triggerRenderQueue);
   player.on('scanningUpdate', triggerRenderQueue);
   player.on('playlistsUpdate', triggerPlaylistsUpdate);
-  player.on('statusupdate', function(){
+  player.on('labelsUpdate', function() {
+    triggerLabelsUpdate();
+    triggerRenderQueue();
+  });
+  player.on('volumeUpdate', renderVolumeSlider);
+  player.on('statusUpdate', function(){
     renderNowPlaying();
     renderQueueButtons();
     labelQueueItems();
@@ -4209,7 +4557,7 @@ function init() {
     renderEvents();
   });
   player.on('currentTrack', updateStreamPlayer);
-  player.on('streamers', renderStreamButton);
+  player.on('anonStreamers', renderStreamButton);
   socket.on('seek', clearStreamBuffer);
   socket.on('disconnect', function(){
     loadStatus = LoadStatus.NoServer;

@@ -31,11 +31,14 @@ Try out the [live demo](http://demo.groovebasin.com/).
 * Streaming support. You can listen to your music library - or share it with
   your friends - even when you are not physically near your home speakers.
 
+* Groove Basin protocol. Write your own client using the
+  [protocol specification](doc/protocol.md), or check out
+  [gbremote](https://github.com/andrewrk/gbremote), a simple command-line
+  remote control.
+
 * MPD protocol support. This means you already have a selection of
   [clients](http://mpd.wikia.com/wiki/Clients) which integrate with
   Groove Basin. For example [MPDroid](https://github.com/abarisain/dmix).
-  If you're writing a new client, upgrade to the Groove Basin Protocol with
-  the `protocolupgrade` command.
 
 * [Last.fm](http://www.last.fm/) scrobbling.
 
@@ -108,7 +111,6 @@ Live discussion in #libgroove on Freenode.
 
 ### Roadmap
 
- 0. Labels
  0. Music library organization
  0. Accoustid Integration
  0. Finalize GrooveBasin protocol spec

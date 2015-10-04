@@ -160,6 +160,12 @@ button:hover .icon
 .icon-closethick
   background-position -96px -128px
 
+.icon-trash
+  background-position -176px -96px
+
+.icon-tag
+  background-position -240px -96px
+
 #blackout
   position fixed
   left 0
@@ -380,27 +386,36 @@ button:hover .icon
     overflow-y hidden
     height 1.2em
 
-  span.track
+  .track
     width 26px
+    float left
 
-  span.title
+  .title
+    width calc(40% - 12px)
+    float left
+
+  .artist
     width 30%
+    float left
 
-  span.artist
+  .album
     width 30%
+    float left
 
-  span.album
-    width 30%
+  .time
+    min-width 41px
+    float right
 
-  span.time
-    width 36px
+  .middle
+    overflow hidden
+    display block
 
-  span
+  .track, .title, .artist, .album, .time
     white-space nowrap
     height 1.2em
     overflow-x hidden
     overflow-y hidden
-    float left
+    display block
     margin-right 4px
 
 #queue-items
@@ -422,35 +437,35 @@ button:hover .icon
   div:nth-child(2n+1)
     background-color #2A2A2A
 
-  div.random
+  .random
     color #96B7EB
 
-  div.old
+  .old
     color #555555
 
-  div.selected
+  .selected
     selected-div()
 
-  div.current
+  .current
     border 1px solid #096AC8
     background-color lightGray
     font-weight bold
     color #75abff
 
-  div.cursor
+  .cursor
     span
       text-decoration underline
 
-  div.border-bottom
+  .border-bottom
     border-bottom 2px dashed #ffffff
 
-  div.border-top
+  .border-top
     border-top 2px dashed #ffffff
 
-  span.track
+  .track
     text-align right
 
-  span.time
+  .time
     text-align right
 
 #upload
@@ -620,7 +635,7 @@ button:hover .icon
   input[type='text']
     width 400px
 
-#add-to-playlist-list li, #add-to-playlist-new
+#add-to-playlist-list li, #add-to-playlist-new, .label-dialog-name, #add-remove-label-new
   font-size 16px
   text-decoration none
   display block
@@ -629,7 +644,40 @@ button:hover .icon
   cursor pointer
   user-select none
 
-#add-to-playlist-list li:hover, #add-to-playlist-new:hover
+#add-to-playlist-list li:hover, #add-to-playlist-new:hover, .label-dialog-name:hover, #add-remove-label-new:hover
   font-weight bold
   color #ffffff
   background #00498f url("img/ui-bg_dots-small_40_00498f_2x2.png") 50% 50% repeat
+
+.label-dialog-trash, .label-dialog-rename
+  float right
+  display block
+  margin -1px 0 0 4px
+
+.label-dialog-color
+  float right
+
+.label-dialog-name
+  display block
+  overflow hidden
+
+.label-dialog-checkbox
+  float left
+  display block
+  margin 6px 0 0 4px
+
+.label-dialog-item
+  clear both
+  height 32px
+
+#add-remove-label-new
+  clear both
+
+.label-box
+  display block
+  width 12px
+  height 12px
+  float right
+  margin-top 4px
+  margin-left 4px
+  border-radius 10px
