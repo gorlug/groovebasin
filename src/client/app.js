@@ -2058,11 +2058,7 @@ function renderNowPlaying() {
 }
 
 function renderAlbumArt(track) {
-  var albumArt = track.albumArt;
-  if(!albumArt || albumArt.length === 0) {
-    albumArt = undefined;
-  }
-  var url = "albumart/" + albumArt;
+  var url = "albumart";
   if(!track.albumArt) {
     url += "?artist=" + escape(track.artistName) + "&album=" + escape(track.albumName);
   }
