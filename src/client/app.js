@@ -14,7 +14,6 @@ var isBrowserTabActive = true;
 
 var tryingToStream = false;
 var actuallyStreaming = false;
-var actuallyPlaying = false;
 var stillBuffering = false;
 var streamAudio = new Audio();
 
@@ -2057,7 +2056,34 @@ function renderNowPlaying() {
   renderVolumeSlider();
 }
 
+var checkedRenderAlbumArt = false;
+var renderAlbumArtCheck = false;
+
+function shouldAlbumArtBeRendered(track) {
+  xhttp = new XMLHttpRequest();
+  xhttp.onreadystatechange = function() {
+    if(xhttp.status != "0") {
+      if(xhttp.response == "true") {
+        renderAlbumArtCheck = true;
+        trackAlbumArtDisplay.style.display = "block";
+        renderAlbumArt(track);
+        triggerResize();
+      }
+      checkedRenderAlbumArt = true;
+    }
+  }
+  xhttp.open("GET", "/albumartrender", true);
+  xhttp.send();
+}
+
 function renderAlbumArt(track) {
+  if(!checkedRenderAlbumArt) {
+    shouldAlbumArtBeRendered(track);
+    return;
+  }
+  if(!renderAlbumArtCheck) {
+    return;
+  }
   var url = "albumart";
   if(!track.albumArt) {
     url += "?artist=" + escape(track.artistName) + "&album=" + escape(track.albumName);
