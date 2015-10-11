@@ -2057,14 +2057,19 @@ function renderNowPlaying() {
 }
 
 var checkedRenderAlbumArt = false;
-var renderAlbumArtCheck = false;
+var shouldAlbumArtBeRendered = false;
 
-function shouldAlbumArtBeRendered(track) {
+/**
+ * This function asks the server whether to render album art
+ * or not.
+ * @param track the track to be rendered
+ */
+function checkForRenderAlbumArt(track) {
   xhttp = new XMLHttpRequest();
   xhttp.onreadystatechange = function() {
     if(xhttp.status != "0") {
       if(xhttp.response == "true") {
-        renderAlbumArtCheck = true;
+        shouldAlbumArtBeRendered = true;
         trackAlbumArtDisplay.style.display = "block";
         renderAlbumArt(track);
         triggerResize();
@@ -2076,23 +2081,28 @@ function shouldAlbumArtBeRendered(track) {
   xhttp.send();
 }
 
+/**
+ * Renders the album art based on the track and whether albumArt is set
+ * to true in the config.json.
+ * 
+ * @param track
+ */
 function renderAlbumArt(track) {
   if(!checkedRenderAlbumArt) {
-    shouldAlbumArtBeRendered(track);
+    checkForRenderAlbumArt(track);
     return;
   }
-  if(!renderAlbumArtCheck) {
+  if(!shouldAlbumArtBeRendered) {
     return;
   }
   var url = "albumart";
   if(!track.albumArt) {
+    // the artist name and album are not actually used by /albumart request but are
+    // needed so that the img element loads a new image
     url += "?artist=" + escape(track.artistName) + "&album=" + escape(track.albumName);
   }
-  trackAlbumArtDisplay.innerHTML = "<a href='" +
-  url + "'" +
-  " target='_blank'>" +
-  "<img src='" + url + "'>" +
-  "</a>";
+  trackAlbumArtDisplay.innerHTML = "<a href='" + url + "'" + " target='_blank'>" +
+  "<img src='" + url + "'>" + "</a>";
 }
 
 function render() {
