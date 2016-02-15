@@ -405,7 +405,7 @@ var selection = {
       for (key in selection.ids.track) {
         selRenderTrack(player.searchResults.trackTable[key]);
       }
-      return trackSetToKeys(trackSet);
+      return getKeysInOrder(trackSet);
       function selRenderArtist(artist){
         for (var i = 0; i < artist.albumList.length; i += 1) {
           var album = artist.albumList[i];
@@ -439,15 +439,15 @@ var selection = {
       return keys;
     }
     function playlistToTrackKeys(){
-      var trackSet = {};
-      function renderQueue(playlist){
+      var playlistItemSet = {};
+      function renderPlaylist(playlist){
         for (var i = 0; i < playlist.itemList.length; i += 1) {
           var item = playlist.itemList[i];
           renderPlaylistItem(item);
         }
       }
       function renderPlaylistItem(item){
-        trackSet[item.track.key] = selection.posToArr(getItemSelPos(item));
+        playlistItemSet[item.id] = selection.posToArr(getItemSelPos(item));
       }
       function getItemSelPos(item){
         return {
@@ -457,15 +457,16 @@ var selection = {
         };
       }
       for (var key in selection.ids.playlist) {
-        renderQueue(player.playlistTable[key]);
+        renderPlaylist(player.playlistTable[key]);
       }
       for (key in selection.ids.playlistItem) {
         renderPlaylistItem(player.playlistItemTable[key]);
       }
-      return trackSetToKeys(trackSet);
+      var playlistItemKeys = getKeysInOrder(playlistItemSet);
+      return playlistItemKeys.map(function(playlistItemKey) { return player.playlistItemTable[playlistItemKey].track.key; });
     }
 
-    function trackSetToKeys(trackSet){
+    function getKeysInOrder(trackSet){
       var key;
       var keys = [];
       if (random) {
@@ -951,7 +952,7 @@ var keyboardHandlers = (function() {
       ctrl: false,
       alt: false,
       shift: false,
-      handler: toggleStreamStatus
+      handler: toggleStreamStatusEvent
     },
     // t
     84: {
@@ -2301,10 +2302,17 @@ function handleDeletePressed(shift) {
   }
 }
 
+function nobodyListening() {
+  return getStreamerCount() === 0 && !hardwarePlaybackOn;
+}
+
 function togglePlayback(){
   if (player.isPlaying === true) {
     player.pause();
   } else if (player.isPlaying === false) {
+    if (nobodyListening()) {
+      toggleStreamStatus();
+    }
     player.play();
   }
   // else we haven't received state from server yet
@@ -4119,6 +4127,7 @@ function onAddRemoveLabelContextMenu(ev) {
   if (!havePerm('playlist')) return;
   if (selection.isEmpty()) return;
   removeContextMenu();
+  updateLabelsUi();
   popAddRemoveLabelDialog();
 }
 
@@ -4317,7 +4326,7 @@ function setUpUi() {
 }
 
 function setUpStreamUi() {
-  streamBtnDom.addEventListener('click', toggleStreamStatus, false);
+  streamBtnDom.addEventListener('click', toggleStreamStatusEvent, false);
   clientVolSlider.addEventListener('change', setClientVol, false);
   clientVolSlider.addEventListener('input', setClientVol, false);
 
@@ -4421,13 +4430,17 @@ function renderStreamButton() {
   clientVolDom.style.display = tryingToStream ? "" : "none";
 }
 
-function toggleStreamStatus(ev) {
-  ev.stopPropagation();
-  ev.preventDefault();
+function toggleStreamStatus() {
   tryingToStream = !tryingToStream;
   sendStreamingStatus();
   renderStreamButton();
   updateStreamPlayer();
+}
+
+function toggleStreamStatusEvent(ev) {
+  ev.stopPropagation();
+  ev.preventDefault();
+  toggleStreamStatus();
 }
 
 function sendStreamingStatus() {
