@@ -11,6 +11,9 @@ var leveldown = require('leveldown');
 var testRunFolder = "run_tests";
 var albumartFolder = testRunFolder + "/albumart";
 var dbFolder = testRunFolder + "/db";
+var musicFolder = testRunFolder + "/music";
+var mp3Title = "Brad_Sucks_-_07_-_Total_Breakdown.mp3";
+var testFolder = "test";
 
 function deleteRecursiveSync(path) {
   if(fs.statSync(path).isDirectory()) {
@@ -41,6 +44,7 @@ describe("AlbumArt", function() {
       }
       fs.mkdirSync(testRunFolder);
       fs.mkdirSync(dbFolder);
+      fs.mkdirSync(musicFolder);
     });
   });
 
@@ -56,8 +60,8 @@ describe("AlbumArt", function() {
       assert(fs.existsSync(albumartFolder));
     });
   });
-  describe("don't know yet", function() {
-    it("something", function(done) {
+  describe("image fetchers", function() {
+    it("get the album art from a mp3 file", function(done) {
       var db = leveldown(dbFolder);
       db.open(function(err) {
         if (err) {
@@ -69,18 +73,51 @@ describe("AlbumArt", function() {
             throw err;
           }
         }
-        loadConfig("config.json", function(err, config) {
+        loadConfig(testFolder + "/config.json", function(err, config) {
           var player = new Player(db, config);
           player.initialize(function() {
-            var args = {
-              mtime: new Date().getTime(),
-              relPath: "01 - Metal Invasion.mp3"
-            };
-            player.addToLibrary(args, function() {
-              console.log(player.libraryIndex);
-              done();
+            fs.readFile(testFolder + "/" + mp3Title, function(err, data) {
+              if(err) throw err;
+              fs.writeFile(musicFolder + "/" + mp3Title, data, function() {
+                var args = {
+                  mtime: new Date().getTime(),
+                  relPath: mp3Title
+                };
+                player.addToLibrary(args, function() {
+                  
+                  var art = new AlbumArt(albumartFolder);
+
+                  var dbFile;
+                  for(key in player.libraryIndex.trackTable) {
+                    dbFile = player.libraryIndex.trackTable[key];
+                    break;
+                  }
+                  var albumArtFile = art.getAlbumArtFile(dbFile);
+                  var file = player.musicDirectory + "/" + dbFile.file;
+                  var fetchers = art.loadImageFetchers(albumArtFile, file, dbFile);
+                  var fetcher = fetchers[1];
+                  fetcher.fetch(function(exists) {
+                    assert(exists, "callback should get an exists == true");
+                    assert(fs.existsSync(albumArtFile), 
+                      "check that the album art file exists by file path");
+                    var expectedSha1 = "9b269df3bdb6a48eea4dc8354d430c459222b24a";
+                    var crypto = require('crypto');
+                    fs.readFile(albumArtFile, function (err, data) {
+                        if(err) throw err;
+                        var calculatedSha1 = crypto
+                          .createHash('sha1')
+                          .update(data, 'utf8')
+                          .digest('hex');
+                        console.log(calculatedSha1);
+                        assert.equal(calculatedSha1, expectedSha1, "make sure " +
+                          "the album art file is the right one by comparing the sha1 checksums");
+                        done();
+                    });
+                  });
+                });
+              });
             });
-          });
+          })
         });
       });
     });
