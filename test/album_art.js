@@ -7,6 +7,7 @@ eval(serverCode);
 var Player = require('../lib/player.js');
 var assert = require('assert');
 var leveldown = require('leveldown');
+var crypto = require('crypto');
 
 var testRunFolder = "run_tests";
 var albumartFolder = testRunFolder + "/albumart";
@@ -63,7 +64,8 @@ describe("AlbumArt", function() {
   describe("image fetchers", function() {
     it("get the album art from a mp3 file", function(done) {
       var db = leveldown(dbFolder);
-      db.open(function(err) {
+      db.open(loadConfigAfterDb.bind({db: db}));
+      function loadConfigAfterDb(err) {
         if (err) {
           if (exitGracefullyIfRunning &&
             /^IO error: lock.*: Resource temporarily unavailable$/.test(err.message))
@@ -73,53 +75,61 @@ describe("AlbumArt", function() {
             throw err;
           }
         }
-        loadConfig(testFolder + "/config.json", function(err, config) {
-          var player = new Player(db, config);
-          player.initialize(function() {
-            fs.readFile(testFolder + "/" + mp3Title, function(err, data) {
-              if(err) throw err;
-              fs.writeFile(musicFolder + "/" + mp3Title, data, function() {
-                var args = {
-                  mtime: new Date().getTime(),
-                  relPath: mp3Title
-                };
-                player.addToLibrary(args, function() {
-                  
-                  var art = new AlbumArt(albumartFolder);
+        loadConfig(testFolder + "/config.json", initializePlayer.bind({db: this.db}));
+      }
+      function initializePlayer(err, config) {
+        var player = new Player(this.db, config);
+        player.initialize(readMp3File.bind({player: player}))
+      }
+      function readMp3File() {
+        fs.readFile(testFolder + "/" + mp3Title, writeMp3FileToMusicFolder.bind({player: this.player}));
+      }
+      function writeMp3FileToMusicFolder(err, data) {
+          if(err) throw err;
+          fs.writeFile(musicFolder + "/" + mp3Title, data, addMp3ToLibrary.bind({player: this.player}));
+      }
+      function addMp3ToLibrary() {
+        var player = this.player;
+        var args = {
+          mtime: new Date().getTime(),
+          relPath: mp3Title
+        };
+        player.addToLibrary(args, initAlbumArt.bind({ player: player }));
+      }
+      function initAlbumArt() {
+          var player = this.player;
+          var art = new AlbumArt(albumartFolder);
 
-                  var dbFile;
-                  for(key in player.libraryIndex.trackTable) {
-                    dbFile = player.libraryIndex.trackTable[key];
-                    break;
-                  }
-                  var albumArtFile = art.getAlbumArtFile(dbFile);
-                  var file = player.musicDirectory + "/" + dbFile.file;
-                  var fetchers = art.loadImageFetchers(albumArtFile, file, dbFile);
-                  var fetcher = fetchers[1];
-                  fetcher.fetch(function(exists) {
-                    assert(exists, "callback should get an exists == true");
-                    assert(fs.existsSync(albumArtFile), 
-                      "check that the album art file exists by file path");
-                    var expectedSha1 = "9b269df3bdb6a48eea4dc8354d430c459222b24a";
-                    var crypto = require('crypto');
-                    fs.readFile(albumArtFile, function (err, data) {
-                        if(err) throw err;
-                        var calculatedSha1 = crypto
-                          .createHash('sha1')
-                          .update(data, 'utf8')
-                          .digest('hex');
-                        console.log(calculatedSha1);
-                        assert.equal(calculatedSha1, expectedSha1, "make sure " +
-                          "the album art file is the right one by comparing the sha1 checksums");
-                        done();
-                    });
-                  });
-                });
-              });
-            });
-          })
-        });
-      });
+          var dbFile;
+          for(key in player.libraryIndex.trackTable) {
+            dbFile = player.libraryIndex.trackTable[key];
+            break;
+          }
+          var albumArtFile = art.getAlbumArtFile(dbFile);
+          var file = player.musicDirectory + "/" + dbFile.file;
+          var fetchers = art.loadImageFetchers(albumArtFile, file, dbFile);
+          var fetcher = fetchers[1];
+          fetcher.fetch(doExistenceChecks.bind( { albumArtFile: albumArtFile }) );
+      }
+      function doExistenceChecks(exists) {
+        albumArtFile = this.albumArtFile;
+        assert(exists, "callback should get an exists == true");
+        assert(fs.existsSync(albumArtFile), 
+          "check that the album art file exists by file path");
+        fs.readFile(albumArtFile, compareHashValues);
+      }
+      function compareHashValues(err, data) {
+        if(err) throw err;
+        var expectedSha1 = "9b269df3bdb6a48eea4dc8354d430c459222b24a";
+        var calculatedSha1 = crypto
+          .createHash('sha1')
+          .update(data, 'utf8')
+          .digest('hex');
+        console.log(calculatedSha1);
+        assert.equal(calculatedSha1, expectedSha1, "make sure " +
+          "the album art file is the right one by comparing the sha1 checksums");
+        done();
+      }
     });
   });
 });
