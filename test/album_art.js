@@ -38,15 +38,25 @@ describe("AlbumArt", function() {
     // runs after all tests in this block
   });
 
-  beforeEach(function() {
-    fs.exists(testRunFolder, function(exists) {
+  beforeEach(function(done) {
+    function createTestRunFolder() {
+      fs.mkdir(testRunFolder, createDbFolder);
+    }
+    function createDbFolder(err) {
+      fs.mkdir(dbFolder, createMusicFolder);
+    }
+    function createMusicFolder(err) {
+      fs.mkdir(musicFolder, function(err) {
+          done();
+      });
+    }
+    function existsCheck(exists) {
       if(exists) {
-        deleteRecursiveSync(testRunFolder);	
+        deleteRecursiveSync(testRunFolder);
       }
-      fs.mkdirSync(testRunFolder);
-      fs.mkdirSync(dbFolder);
-      fs.mkdirSync(musicFolder);
-    });
+      createTestRunFolder();
+    }
+    fs.exists(testRunFolder, existsCheck);
   });
 
   afterEach(function() {
@@ -62,54 +72,52 @@ describe("AlbumArt", function() {
     });
   });
   describe("image fetchers", function() {
-    it("get the album art from a mp3 file", function(done) {
-      var db = leveldown(dbFolder);
+    var player;
+    var db;
+    function openDb() {
+      db = leveldown(dbFolder);
       db.open(loadConfigAfterDb.bind({db: db}));
       function loadConfigAfterDb(err) {
         if (err) {
-          if (exitGracefullyIfRunning &&
-            /^IO error: lock.*: Resource temporarily unavailable$/.test(err.message))
-          {
-            return;
-          } else {
-            throw err;
-          }
+          throw err;
         }
         loadConfig(testFolder + "/config.json", initializePlayer.bind({db: this.db}));
       }
-      function initializePlayer(err, config) {
-        var player = new Player(this.db, config);
-        player.initialize(readMp3File.bind({player: player}))
-      }
-      function readMp3File() {
-        fs.readFile(testFolder + "/" + mp3Title, writeMp3FileToMusicFolder.bind({player: this.player}));
-      }
-      function writeMp3FileToMusicFolder(err, data) {
-          if(err) throw err;
-          fs.writeFile(musicFolder + "/" + mp3Title, data, addMp3ToLibrary.bind({player: this.player}));
-      }
-      function addMp3ToLibrary() {
-        var player = this.player;
-        var args = {
-          mtime: new Date().getTime(),
-          relPath: mp3Title
-        };
-        player.addToLibrary(args, initAlbumArt.bind({ player: player }));
-      }
-      function initAlbumArt() {
-          var player = this.player;
-          var art = new AlbumArt(albumartFolder);
+    }
+    function initializePlayer(err, config) {
+      player = new Player(this.db, config);
+      player.initialize(readMp3File)
+    }
+    function readMp3File() {
+      fs.readFile(testFolder + "/" + mp3Title, writeMp3FileToMusicFolder);
+    }
+    function writeMp3FileToMusicFolder(err, data) {
+      if(err) throw err;
+      fs.writeFile(musicFolder + "/" + mp3Title, data, addMp3ToLibrary);
+    }
+    function addMp3ToLibrary() {
+      var args = {
+        mtime: new Date().getTime(),
+        relPath: mp3Title
+      };
+      player.addToLibrary(args, initAlbumArt);
+    }
+    function initAlbumArt() { }
+    it("get the album art from a mp3 file", function(done) {
+      openDb();
+      initAlbumArt = function() {
+        var art = new AlbumArt(albumartFolder);
 
-          var dbFile;
-          for(key in player.libraryIndex.trackTable) {
-            dbFile = player.libraryIndex.trackTable[key];
-            break;
-          }
-          var albumArtFile = art.getAlbumArtFile(dbFile);
-          var file = player.musicDirectory + "/" + dbFile.file;
-          var fetchers = art.loadImageFetchers(albumArtFile, file, dbFile);
-          var fetcher = fetchers[1];
-          fetcher.fetch(doExistenceChecks.bind( { albumArtFile: albumArtFile }) );
+        var dbFile;
+        for(key in player.libraryIndex.trackTable) {
+          dbFile = player.libraryIndex.trackTable[key];
+          break;
+        }
+        var albumArtFile = art.getAlbumArtFile(dbFile);
+        var file = player.musicDirectory + "/" + dbFile.file;
+        var fetchers = art.loadImageFetchers(albumArtFile, file, dbFile);
+        var fetcher = fetchers[1];
+        fetcher.fetch(doExistenceChecks.bind( { albumArtFile: albumArtFile }) );
       }
       function doExistenceChecks(exists) {
         albumArtFile = this.albumArtFile;
@@ -128,6 +136,18 @@ describe("AlbumArt", function() {
         console.log(calculatedSha1);
         assert.equal(calculatedSha1, expectedSha1, "make sure " +
           "the album art file is the right one by comparing the sha1 checksums");
+        db.close(function(err) {
+          console.log("close err: " + err);
+          done(err);
+        });
+      }
+    });
+    it("get the album art from a picture in the same folder", function(done) {
+      mp3Title = "Brad_Sucks_-_07_-_Total_Breakdown_no_art.mp3";
+      player = undefined;
+      db = undefined;
+      openDb();
+      initAlbumArt = function() {
         done();
       }
     });
