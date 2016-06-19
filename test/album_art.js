@@ -121,8 +121,11 @@ describe("AlbumArt", function() {
       player = new Player(this.db, config);
       player.initialize(writeMp3FileToMusicFolder)
     }
-    function writeMp3FileToMusicFolder() {
-      copyFile(testFolder + "/" + mp3Title, musicFolder + "/" + mp3Title, addMp3ToLibrary);
+    function writeMp3FileToMusicFolder(title) {
+      if(!title) {
+        title = mp3Title;
+      }
+      copyFile(testFolder + "/" + title, musicFolder + "/" + title, addMp3ToLibrary);
     }
     function addMp3ToLibrary() {
       var args = {
@@ -172,7 +175,9 @@ describe("AlbumArt", function() {
         var dbFile;
         for(key in player.libraryIndex.trackTable) {
           dbFile = player.libraryIndex.trackTable[key];
-          break;
+          if(dbFile.file.indexOf(mp3Title) != -1) {
+            break;
+          }
         }
         var albumArtFile = art.getAlbumArtFile(dbFile);
         var file = player.musicDirectory + "/" + dbFile.file;
@@ -189,7 +194,7 @@ describe("AlbumArt", function() {
           });
         });
       }
-      copyFile(testFolder + "/" + cover, musicFolder + "/" + cover, initAlbumArt);
+      copyFile(testFolder + "/" + cover, musicFolder + "/" + cover, writeMp3FileToMusicFolder.bind({title: mp3Title}));
     });
   });
 });
