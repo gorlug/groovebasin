@@ -146,24 +146,26 @@ describe("AlbumArt", function() {
         var file = player.musicDirectory + "/" + dbFile.file;
         var fetchers = art.loadImageFetchers(albumArtFile, file, dbFile);
         var fetcher = fetchers[1];
-        checkAlbumArtFileHash(fetcher, albumArtFile, closeDb);
-        function closeDb() {
-          db.close(function(err) {
+        checkAlbumArtFileHash(fetcher, albumArtFile, function() {
+            done();
+          });
+        /*db.close(function(err) {
           if(err)
           {
             console.log("close err: " + err);
           }
-          done(err);
+          checkAlbumArtFileHash(fetcher, albumArtFile, function() {
+            done();
           });
-        }
+        });*/
       }
     });
     it("get the album art from a picture in the same folder", function(done) {
       mp3Title = "Brad_Sucks_-_07_-_Total_Breakdown_no_art.mp3";
       var cover = "Brad_Sucks_-_Out_Of_It.jpg";
-      player = undefined;
-      db = undefined;
-      copyFile(testFolder + "/" + cover, musicFolder + "/" + cover, openDb);
+      //player = undefined;
+      //db = undefined;
+      
       initAlbumArt = function() {
         var art = new AlbumArt(albumartFolder);
 
@@ -177,17 +179,17 @@ describe("AlbumArt", function() {
         var fetchers = art.loadImageFetchers(albumArtFile, file, dbFile);
         var fetcher = fetchers[2];
         
-        checkAlbumArtFileHash(fetcher, albumArtFile, closeDb);
-        function closeDb() {
-          db.close(function(err) {
+        db.close(function(err) {
           if(err)
           {
             console.log("close err: " + err);
           }
-          done(err);
+          checkAlbumArtFileHash(fetcher, albumArtFile, function() {
+            done();
           });
-        }
+        });
       }
+      copyFile(testFolder + "/" + cover, musicFolder + "/" + cover, initAlbumArt);
     });
   });
 });
